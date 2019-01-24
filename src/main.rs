@@ -77,13 +77,13 @@ fn main() {
         .version(env!("CARGO_PKG_VERSION"))
         .author("Brendan Molloy <brendan@bbqsrc.net>")
         .about("Testing frontend for the DivvunSpell library")
-        .arg(Arg::with_name("zhfst")
-            .short("z")
-            .long("zhfst")
-            .value_name("ZHFST")
-            .required(true)
-            .help("Use the given ZHFST file")
-            .takes_value(true))
+        // .arg(Arg::with_name("zhfst")
+        //     .short("z")
+        //     .long("zhfst")
+        //     .value_name("ZHFST")
+        //     .required(true)
+        //     .help("Use the given ZHFST file")
+        //     .takes_value(true))
         .arg(Arg::with_name("suggest")
             .short("s")
             .long("suggest")
@@ -110,7 +110,44 @@ fn main() {
         .arg(Arg::with_name("WORDS")
             .multiple(true)
             .help("The words to be processed"))
+        .subcommand(SubCommand::with_name("chunk")
+            .arg(Arg::with_name("zhfst")
+            .short("z")
+            .long("zhfst")
+            .value_name("ZHFST")
+            .required(true)
+            .help("Use the given ZHFST file")
+            .takes_value(true)))
         .get_matches();
+
+    if let Some(ref matches) = matches.subcommand_matches("chunk") {
+        let zhfst_file = matches.value_of("zhfst").unwrap();
+
+        let archive = match divvunspell::archive::SpellerArchive::new(zhfst_file) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("{:?}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let speller = archive.speller();
+        let mutator = speller.mutator();
+        let lexicon = speller.lexicon();
+
+        use std::path::Path;
+
+        let target_dir = Path::new("./out.chfst");
+        let chunk_size: usize = 24 * 1024 * 1024;
+
+        eprintln!("Serializing lexicon...");
+        lexicon.serialize(chunk_size, &target_dir.join("lexicon")).unwrap();
+        
+        eprintln!("Serializing mutator...");
+        mutator.serialize(chunk_size, &target_dir.join("mutator")).unwrap();
+
+        return;
+    }
 
     let is_always_suggesting = matches.is_present("always-suggest");
     let is_suggesting = matches.is_present("suggest") || is_always_suggesting;

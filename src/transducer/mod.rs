@@ -5,13 +5,15 @@ pub mod symbol_transition;
 pub mod transition_table;
 pub mod tree_node;
 pub mod realign;
+pub mod chunk;
+pub mod convert;
 
 use std::fmt;
 use memmap::Mmap;
 use std::sync::Arc;
 
 use crate::types::{TransitionTableIndex, Weight, SymbolNumber, HeaderFlag};
-use crate::constants::{TRANS_INDEX_SIZE, TRANS_SIZE, TARGET_TABLE};
+use crate::constants::{INDEX_TABLE_SIZE, TRANS_TABLE_SIZE, TARGET_TABLE};
 
 use self::header::TransducerHeader;
 use self::alphabet::TransducerAlphabet;
@@ -37,6 +39,16 @@ impl fmt::Debug for Transducer {
     }
 }
 
+#[derive(Debug)]
+pub enum TransducerSerializeError {
+    InvalidChunkSize
+}
+
+pub struct TransducerSerializeReport {
+    pub index_table_chunks: usize,
+    pub transition_table_chunks: usize
+}
+
 impl Transducer {
     pub fn from_mapped_memory(buf: Mmap) -> Transducer {
         let buf = Arc::new(buf);
@@ -48,7 +60,7 @@ impl Transducer {
         let index_table_offset = alphabet_offset + alphabet.len();
         // println!("Index table start offset: {}", index_table_offset);
 
-        let index_table_end = index_table_offset + TRANS_INDEX_SIZE * header.index_table_size();
+        let index_table_end = index_table_offset + INDEX_TABLE_SIZE * header.index_table_size();
         // println!("Index table end: {}", index_table_end);
         let index_table = IndexTable::new(buf.clone(),
             index_table_offset,
@@ -57,7 +69,7 @@ impl Transducer {
         );
 
         // println!("Trans table start offset: {}", index_table_end);
-        let trans_table_end = index_table_end + TRANS_SIZE * header.target_table_size();
+        let trans_table_end = index_table_end + TRANS_TABLE_SIZE * header.target_table_size();
         let trans_table = TransitionTable::new(buf.clone(),
             index_table_end,
             trans_table_end,
@@ -71,6 +83,40 @@ impl Transducer {
             index_table: index_table,
             transition_table: trans_table,
         }
+    }
+
+    pub fn serialize(&self, chunk_size: usize, target_dir: &std::path::Path) -> Result<(), TransducerSerializeError> {
+        if chunk_size % 8 != 0 {
+            return Err(TransducerSerializeError::InvalidChunkSize);
+        }
+
+        // Ensure target path exists
+        if !target_dir.exists() {
+            eprintln!("Creating directory: {:?}", target_dir);
+            std::fs::create_dir_all(target_dir).expect("create target dir");
+        }
+
+
+        // Write transition table chunks
+        eprintln!("Writing transition table...");
+        let transition_table_count = self.transition_table().serialize(chunk_size, target_dir).unwrap();
+
+        // Write index table chunks
+        eprintln!("Writing index table...");
+        let index_table_count = self.index_table().serialize(chunk_size, target_dir).unwrap();
+        
+        // Write header + meta index
+        let meta = self::chunk::MetaRecord {
+            index_table_count,
+            transition_table_count,
+            chunk_size,
+            raw_alphabet: self.alphabet().key_table().to_owned()
+        };
+
+        eprintln!("Writing meta index...");
+        meta.serialize(target_dir);
+
+        Ok(())
     }
 
     pub fn buffer(&self) -> &[u8] {

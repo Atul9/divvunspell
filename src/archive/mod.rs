@@ -102,6 +102,8 @@ impl SpellerArchive {
         let errmodel_range = slice_by_name(&mut archive, &metadata.errmodel.id)?;
         drop(archive);
 
+        eprintln!("Acceptor range: {:?}", acceptor_range);
+
         // Load transducers
         let acceptor_mmap = unsafe {
             MmapOptions::new()
