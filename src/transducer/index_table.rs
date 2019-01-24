@@ -40,6 +40,10 @@ impl IndexTable {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.len - self.offset
+    }
+
     fn make_cursor<'a>(&'a self) -> Cursor<&'a [u8]> {
         Cursor::new(&self.mmap)
     }
@@ -52,7 +56,10 @@ impl IndexTable {
         }
 
         // Size is the number of indexes, and that multiplied by TRANS_TABLE_SIZE is the total byte size
-        let total_bytes = self.len - self.offset;
+        let real_total_bytes = self.len - self.offset;
+
+        // We're converting this from 6 byte width to 8, so we need to multiply our output
+        let total_bytes = real_total_bytes / 6 * 8;
 
         // How many indexes can we get per chunk size?
         let max_index_per_iter = chunk_size / 8usize;
@@ -65,7 +72,7 @@ impl IndexTable {
         for i in 1usize..chunk_count + 1 {
             eprintln!("Writing chunk: {}", i);
 
-            let filename = format!("index-{:02}", i);
+            let filename = format!("index-{:02}", i - 1);
             let mut file = std::fs::File::create(target_dir.join(filename)).unwrap();
             
             // TODO: Check these aren't off by one

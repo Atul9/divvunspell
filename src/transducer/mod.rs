@@ -4,7 +4,6 @@ pub mod index_table;
 pub mod symbol_transition;
 pub mod transition_table;
 pub mod tree_node;
-pub mod realign;
 pub mod chunk;
 pub mod convert;
 
@@ -21,7 +20,28 @@ use self::index_table::IndexTable;
 use self::transition_table::TransitionTable;
 use self::symbol_transition::SymbolTransition;
 
-pub struct Transducer {
+pub trait Transducer {
+    fn alphabet(&self) -> &TransducerAlphabet;
+    fn mut_alphabet(&mut self) -> &mut TransducerAlphabet;
+    fn transition_input_symbol(&self, i: TransitionTableIndex) -> Option<SymbolNumber>;
+    fn has_transitions(&self, i: TransitionTableIndex, s: Option<SymbolNumber>) -> bool;
+    fn next(
+        &self,
+        i: TransitionTableIndex,
+        symbol: SymbolNumber,
+    ) -> Option<TransitionTableIndex>;
+    fn has_epsilons_or_flags(&self, i: TransitionTableIndex) -> bool;
+    fn take_epsilons_and_flags(&self, i: TransitionTableIndex) -> Option<SymbolTransition>;
+    fn take_epsilons(&self, i: TransitionTableIndex) -> Option<SymbolTransition>;
+    fn take_non_epsilons(
+        &self,
+        i: TransitionTableIndex,
+        symbol: SymbolNumber,
+    ) -> Option<SymbolTransition>;
+    fn is_final(&self, i: TransitionTableIndex) -> bool;
+    fn final_weight(&self, i: TransitionTableIndex) -> Option<Weight>;
+}
+pub struct HfstTransducer {
     buf: Arc<Mmap>,
     header: TransducerHeader,
     alphabet: TransducerAlphabet,
@@ -29,7 +49,7 @@ pub struct Transducer {
     transition_table: TransitionTable,
 }
 
-impl fmt::Debug for Transducer {
+impl fmt::Debug for HfstTransducer {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(f, "{:?}", self.header)?;
         writeln!(f, "{:?}", self.alphabet)?;
@@ -49,8 +69,8 @@ pub struct TransducerSerializeReport {
     pub transition_table_chunks: usize
 }
 
-impl Transducer {
-    pub fn from_mapped_memory(buf: Mmap) -> Transducer {
+impl HfstTransducer {
+    pub fn from_mapped_memory(buf: Mmap) -> HfstTransducer {
         let buf = Arc::new(buf);
         let header = TransducerHeader::new(&buf);
         let alphabet_offset = header.len();
@@ -76,7 +96,7 @@ impl Transducer {
             header.target_table_size() as u32,
         );
 
-        Transducer {
+        HfstTransducer {
             buf: buf,
             header: header,
             alphabet: alphabet,
@@ -96,15 +116,14 @@ impl Transducer {
             std::fs::create_dir_all(target_dir).expect("create target dir");
         }
 
+        // Write index table chunks
+        eprintln!("Writing index table... (Size: {})", self.index_table().len());
+        let index_table_count = self.index_table().serialize(chunk_size, target_dir).unwrap();
 
         // Write transition table chunks
         eprintln!("Writing transition table...");
         let transition_table_count = self.transition_table().serialize(chunk_size, target_dir).unwrap();
 
-        // Write index table chunks
-        eprintln!("Writing index table...");
-        let index_table_count = self.index_table().serialize(chunk_size, target_dir).unwrap();
-        
         // Write header + meta index
         let meta = self::chunk::MetaRecord {
             index_table_count,
@@ -131,7 +150,17 @@ impl Transducer {
         &self.transition_table
     }
 
-    pub fn is_final(&self, i: TransitionTableIndex) -> bool {
+    pub fn is_weighted(&self) -> bool {
+        self.header.has_flag(HeaderFlag::Weighted)
+    }
+    
+    pub fn header(&self) -> &TransducerHeader {
+        &self.header
+    }
+}
+
+impl Transducer for HfstTransducer {
+    fn is_final(&self, i: TransitionTableIndex) -> bool {
         if i >= TARGET_TABLE {
             self.transition_table.is_final(i - TARGET_TABLE)
         } else {
@@ -139,7 +168,7 @@ impl Transducer {
         }
     }
 
-    pub fn final_weight(&self, i: TransitionTableIndex) -> Option<Weight> {
+    fn final_weight(&self, i: TransitionTableIndex) -> Option<Weight> {
         if i >= TARGET_TABLE {
             self.transition_table.weight(i - TARGET_TABLE)
         } else {
@@ -147,12 +176,11 @@ impl Transducer {
         }
     }
 
-    pub fn has_transitions(&self, i: TransitionTableIndex, s: Option<SymbolNumber>) -> bool {
-        if s.is_none() {
-            return false;
-        }
-
-        let sym = s.unwrap();
+    fn has_transitions(&self, i: TransitionTableIndex, s: Option<SymbolNumber>) -> bool {
+        let sym = match s {
+            Some(v) => v,
+            None => return false
+        };
 
         if i >= TARGET_TABLE {
             match self.transition_table.input_symbol(i - TARGET_TABLE) {
@@ -167,7 +195,7 @@ impl Transducer {
         }
     }
 
-    pub fn has_epsilons_or_flags(&self, i: TransitionTableIndex) -> bool {
+    fn has_epsilons_or_flags(&self, i: TransitionTableIndex) -> bool {
         if i >= TARGET_TABLE {
             match self.transition_table.input_symbol(i - TARGET_TABLE) {
                 Some(sym) => sym == 0 || self.alphabet.is_flag(sym),
@@ -180,32 +208,32 @@ impl Transducer {
         }
     }
 
-    pub fn has_non_epsilons_or_flags(&self, i: TransitionTableIndex) -> bool {
-        if i >= TARGET_TABLE {
-            match self.transition_table.input_symbol(i - TARGET_TABLE) {
-                Some(res) => res != 0 && !self.alphabet().is_flag(res),
-                None => false,
-            }
-        } else {
-            let total = self.alphabet.key_table().len() as u16;
+    // pub fn has_non_epsilons_or_flags(&self, i: TransitionTableIndex) -> bool {
+    //     if i >= TARGET_TABLE {
+    //         match self.transition_table.input_symbol(i - TARGET_TABLE) {
+    //             Some(res) => res != 0 && !self.alphabet().is_flag(res),
+    //             None => false,
+    //         }
+    //     } else {
+    //         let total = self.alphabet.key_table().len() as u16;
 
-            for j in 1..total {
-                let res = self.index_table.input_symbol(i + j as u32);
+    //         for j in 1..total {
+    //             let res = self.index_table.input_symbol(i + j as u32);
 
-                if res.is_none() {
-                    continue;
-                }
+    //             if res.is_none() {
+    //                 continue;
+    //             }
 
-                if res.unwrap() == j {
-                    return true;
-                }
-            }
+    //             if res.unwrap() == j {
+    //                 return true;
+    //             }
+    //         }
 
-            false
-        }
-    }
+    //         false
+    //     }
+    // }
 
-    pub fn take_epsilons(&self, i: TransitionTableIndex) -> Option<SymbolTransition> {
+    fn take_epsilons(&self, i: TransitionTableIndex) -> Option<SymbolTransition> {
         if let Some(0) = self.transition_table.input_symbol(i) {
             Some(self.transition_table.symbol_transition(i))
         } else {
@@ -213,7 +241,7 @@ impl Transducer {
         }
     }
 
-    pub fn take_epsilons_and_flags(&self, i: TransitionTableIndex) -> Option<SymbolTransition> {
+    fn take_epsilons_and_flags(&self, i: TransitionTableIndex) -> Option<SymbolTransition> {
         if let Some(sym) = self.transition_table.input_symbol(i) {
             if sym != 0 && !self.alphabet.is_flag(sym) {
                 return None;
@@ -225,7 +253,7 @@ impl Transducer {
         }
     }
 
-    pub fn take_non_epsilons(
+    fn take_non_epsilons(
         &self,
         i: TransitionTableIndex,
         symbol: SymbolNumber,
@@ -241,7 +269,7 @@ impl Transducer {
         }
     }
 
-    pub fn next(
+    fn next(
         &self,
         i: TransitionTableIndex,
         symbol: SymbolNumber,
@@ -255,19 +283,15 @@ impl Transducer {
         }
     }
 
-    pub fn header(&self) -> &TransducerHeader {
-        &self.header
+    fn transition_input_symbol(&self, i: TransitionTableIndex) -> Option<SymbolNumber> {
+        self.transition_table().input_symbol(i)
     }
 
-    pub fn alphabet(&self) -> &TransducerAlphabet {
+    fn alphabet(&self) -> &TransducerAlphabet {
         &self.alphabet
     }
 
-    pub fn mut_alphabet(&mut self) -> &mut TransducerAlphabet {
+    fn mut_alphabet(&mut self) -> &mut TransducerAlphabet {
         &mut self.alphabet
-    }
-
-    pub fn is_weighted(&self) -> bool {
-        self.header.has_flag(HeaderFlag::Weighted)
     }
 }

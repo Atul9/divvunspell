@@ -52,10 +52,10 @@ impl TransitionTable {
         let chunk_count = total_bytes / chunk_size + (if has_excess { 1 } else { 0 });
         eprintln!("Chunk count: {} max index per iter: {} total bytes: {}", chunk_count, max_index_per_iter, total_bytes);
 
-        for i in 1usize..chunk_count + 1 {
+        for i in 1usize..=chunk_count {
             eprintln!("Writing chunk: {}", i);
 
-            let filename = format!("transition-{:02}", i);
+            let filename = format!("transition-{:02}", i - 1);
             let mut file = std::fs::File::create(target_dir.join(filename)).unwrap();
             
             // TODO: Check these aren't off by one
