@@ -38,7 +38,9 @@ mod tests {
     fn word_indices() {
         let text = "these are  4 words, the number   counts as\ta 'word' but punctuation doesn't.";
 
-        let tokens = text.word_indices().collect::<Vec<(usize, &str)>>();
+        let tokens = text.word_indices()
+            .filter(|s| s.1.chars().any(|ch| ch.is_alphanumeric()))
+            .collect::<Vec<(usize, &str)>>();
 
         assert_eq!(tokens, &[
             (0, "these"),
