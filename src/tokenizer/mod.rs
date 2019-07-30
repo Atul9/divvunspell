@@ -1,3 +1,5 @@
+use std::iter::Filter;
+
 use unic_segment::{WordBoundIndices, Words};
 
 pub mod caps;
@@ -5,7 +7,7 @@ pub mod caps;
 pub trait Tokenize {
     fn word_bound_indices(&self) -> WordBoundIndices;
     fn words(&self) -> Words;
-    fn word_indices(&self) -> WordBoundIndices;
+    fn word_indices(&self) -> Filter<WordBoundIndices<'_>, fn(&(usize, &str)) -> bool>;
 }
 
 impl Tokenize for str {
@@ -17,9 +19,8 @@ impl Tokenize for str {
         Words::new(self, |s| s.chars().any(|ch| ch.is_alphanumeric()))
     }
 
-    fn word_indices(&self) -> WordBoundIndices {
-        // TODO: this should use a new thing called WordIndices
-        WordBoundIndices::new(self)
+    fn word_indices(&self) -> Filter<WordBoundIndices<'_>, fn(&(usize, &str)) -> bool> {
+        WordBoundIndices::new(self).filter(|s| s.1.chars().any(|ch| ch.is_alphanumeric()))
     }
 }
 
@@ -39,7 +40,6 @@ mod tests {
         let text = "these are  4 words, the number   counts as\ta 'word' but punctuation doesn't.";
 
         let tokens = text.word_indices()
-            .filter(|s| s.1.chars().any(|ch| ch.is_alphanumeric()))
             .collect::<Vec<(usize, &str)>>();
 
         assert_eq!(tokens, &[
