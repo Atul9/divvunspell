@@ -34,6 +34,13 @@ pub struct TreeNode {
     pub lexicon_state: TransitionTableIndex,
 }
 
+impl TreeNode {
+    #[inline(always)]
+    pub fn key(&self) -> TreeNode {
+        self.clone()
+    }
+}
+
 impl std::cmp::PartialEq for TreeNode {
     // This equality implementation is purposely not entirely correct. It is much faster this way.
     // The idea is that the seen_nodes hashset has to do a lot less work, and even if we miss a bunch,

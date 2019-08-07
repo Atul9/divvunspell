@@ -318,11 +318,11 @@ fn main() {
     // let aligned = SpellerArchive::new("./aligned-test.zhfst").unwrap();
 
     let now = Instant::now();
-    for i in 0..2 {
+    for i in 0..1 {
         let now = Instant::now();
         for line in tuples.iter() {
             let mut ncfg = cfg.clone();
-            ncfg.seen_node_sample_rate = i;
+            ncfg.seen_node_sample_rate = 3;
             println!("{}", time_suggest(unaligned.speller(), &line, ncfg));
         }
         let then = now.elapsed();
