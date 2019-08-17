@@ -15,7 +15,8 @@ use std::hash::{Hash, Hasher, BuildHasher};
 
 
 const PRIMES: &[u8] = &[
-    2,  3,  5,  7, 11, 13, 17, 19, 23, 29, //7487, 10627, 15569, 20149 
+    1, //2,  
+    //3,  // 5,  7, 11, 13, 17, 19, 23, 29, //7487, 10627, 15569, 20149 
 //    31,  37,  41,  43,  47,  53,  59,  61,  67,  71,
 //    73,  79,  83,  89,  97, 101, 103, 107, 109, 113,
 //   127, 131, 137, 139, 149, 151, 157, 163, 167, 173,
@@ -141,13 +142,13 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
 
                             let new_node = next_node.update_lexicon(pool, epsilon_transition);
 
-                            if !nodes.test(&new_node.key()) {
+                            if !nodes.test(&new_node) {
                                 output_nodes.push(new_node);
                             }
                         } else {
                             let new_node = next_node.update_lexicon(pool, transition);
 
-                            if !nodes.test(&new_node.key()) {
+                            if !nodes.test(&new_node) {
                                 output_nodes.push(new_node);
                             }
                         }
@@ -161,13 +162,10 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                             continue;
                         }
 
-                        let (is_success, mut applied_node) = next_node.apply_operation(pool, op);
+                        if let Some(mut applied_node) = next_node.apply_operation(pool, op) {
+                            applied_node.update_lexicon_mut(&transition);
 
-                        if is_success {
-                            let epsilon_transition = transition.clone_with_epsilon_symbol();
-                            applied_node.update_lexicon_mut(epsilon_transition);
-
-                            if !nodes.test(&applied_node.key()) {
+                            if !nodes.test(&applied_node) {
                                 output_nodes.push(applied_node);
                             }
                         }
@@ -206,7 +204,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     next_node.weight() + transition.weight().unwrap(),
                 ) {
                     let new_node = next_node.update_mutator(pool, transition);
-                    if !nodes.test(&new_node.key()) {
+                    if !nodes.test(&new_node) {
                         output_nodes.push(new_node);
                     }
                 }
@@ -329,7 +327,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         noneps_trans.weight().unwrap() + mutator_weight,
                     );
 
-                    if !nodes.test(&new_node.key()) {
+                    if !nodes.test(&new_node) {
                         output_nodes.push(new_node);
                     }
                 }
@@ -371,7 +369,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         transition_weight,
                     );
 
-                    if !nodes.test(&new_node.key()) {
+                    if !nodes.test(&new_node) {
                         output_nodes.push(new_node);
                     }
                 }
@@ -625,7 +623,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut suggestions: Vec<Suggestion> = vec![];
         let mut best_weight = self.config.max_weight.unwrap_or(f32::INFINITY);
 
-        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::with_capacity(100000);
+        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::with_capacity(2u64.pow(self.config.seen_node_sample_rate as u32));
         let mut next_rando = PRIMES.to_vec();
         let mut max_rando = next_rando.pop().unwrap();
         let mut rando = 0;
@@ -639,16 +637,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                 }
             };
 
-            // Every X iterations, store one seen node.
-            // if rando == self.config.seen_node_sample_rate {
-            //     seen_nodes.add(next_node.key());
-            //     rando = 0;
-            // } else {
-            //     rando += 1;
-            // }
             if rando == max_rando {
                 seen_nodes.add(next_node.key());
-                // counted_nodes.entry((*next_node).clone()).and_modify(|e| *e += 1).or_insert(1);
                 rando = 0;
                 max_rando = next_rando.pop().unwrap_or(1);
             } else {
