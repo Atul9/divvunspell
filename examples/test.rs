@@ -318,18 +318,20 @@ fn main() {
     // let aligned = SpellerArchive::new("./aligned-test.zhfst").unwrap();
 
     let now = Instant::now();
-    for i in 14..=20 {
+    for i in 14..20 {//14..=20 {
         let now = Instant::now();
         for line in tuples.iter() {
             let mut ncfg = cfg.clone();
             ncfg.seen_node_sample_rate = i;
-            println!("{}", 
-            time_suggest(unaligned.speller(), &line, ncfg)
-            );
+            // println!("{}", 
+            time_suggest(unaligned.speller(), &line, ncfg);
+            // );
         }
         let then = now.elapsed();
         println!("{}: {}.{}", 2u64.pow(i.into()), then.as_secs(), then.subsec_nanos() / 1000);
     }
+
+    std::thread::sleep(std::time::Duration::from_millis(10000));
     // let unaligned_time = now.elapsed();
 
     // let now = Instant::now();
