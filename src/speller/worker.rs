@@ -162,8 +162,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                             continue;
                         }
 
-                        if let Some(mut applied_node) = next_node.apply_operation(pool, op) {
-                            applied_node.update_lexicon_mut(&transition);
+                        if let Some(applied_node) = next_node.apply_operation(pool, op, &transition) {
+                            // applied_node.update_lexicon_mut(&transition);
 
                             if !nodes.test(&applied_node) {
                                 output_nodes.push(applied_node);

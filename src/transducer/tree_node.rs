@@ -1,6 +1,7 @@
 use lifeguard::{Pool, Recycled};
 use std::hash::{Hash, Hasher};
 use std::mem;
+use std::borrow::Cow;
 
 use super::symbol_transition::SymbolTransition;
 use crate::types::{
@@ -124,12 +125,6 @@ impl TreeNode {
         &self.flag_state
     }
 
-    #[inline(always)]
-    pub fn update_lexicon_mut(&mut self, transition: &SymbolTransition) {
-        self.lexicon_state = transition.target().unwrap();
-        self.weight = EqWeight(self.weight.0 + transition.weight().unwrap());
-    }
-
     pub fn update_lexicon<'a>(
         &self,
         pool: &'a Pool<TreeNode>,
@@ -229,6 +224,35 @@ impl TreeNode {
         pool: &'a Pool<TreeNode>,
         feature: SymbolNumber,
         value: i16,
+        transition: &SymbolTransition,
+    ) -> Recycled<'a, TreeNode> {
+        let mut node = self.apply_transition(pool, transition); //pool.new();
+
+        // if node.string != self.string {
+        //     node.string.truncate(0);
+        //     node.string.extend(&self.string);
+        // }
+
+        // node.input_state = self.input_state;
+        // node.mutator_state = self.mutator_state;
+        // node.lexicon_state = transition.target().unwrap();
+
+        // if node.flag_state != self.flag_state {
+        //     node.flag_state.truncate(0);
+        //     node.flag_state.extend(&self.flag_state);
+        // }
+
+        node.flag_state[feature as usize] = value;
+
+        // node.weight = EqWeight(self.weight.0 + transition.weight().unwrap());
+
+        node
+    }
+
+    pub fn apply_transition<'a>(
+        &self, 
+        pool: &'a Pool<TreeNode>,
+        transition: &SymbolTransition
     ) -> Recycled<'a, TreeNode> {
         let mut node = pool.new();
 
@@ -239,17 +263,14 @@ impl TreeNode {
 
         node.input_state = self.input_state;
         node.mutator_state = self.mutator_state;
-        node.lexicon_state = self.lexicon_state;
+        node.lexicon_state = transition.target().unwrap();
 
         if node.flag_state != self.flag_state {
             node.flag_state.truncate(0);
             node.flag_state.extend(&self.flag_state);
         }
 
-        node.flag_state[feature as usize] = value;
-
-        node.weight = self.weight;
-
+        node.weight = EqWeight(self.weight.0 + transition.weight().unwrap());
         node
     }
 
@@ -257,13 +278,14 @@ impl TreeNode {
         &self,
         pool: &'a Pool<TreeNode>,
         op: &FlagDiacriticOperation,
+        transition: &SymbolTransition,
     ) -> Option<Recycled<'a, TreeNode>> {
         match op.operation {
             FlagDiacriticOperator::PositiveSet => {
-                Some(self.update_flag(pool, op.feature, op.value))
+                Some(self.update_flag(pool, op.feature, op.value, transition))
             }
             FlagDiacriticOperator::NegativeSet => {
-                Some(self.update_flag(pool, op.feature, -1 * op.value))
+                Some(self.update_flag(pool, op.feature, -1 * op.value, transition))
             }
             FlagDiacriticOperator::Require => {
                 let res = if op.value == 0 {
@@ -273,7 +295,7 @@ impl TreeNode {
                 };
 
                 if res {
-                    Some(pool.new_from(self))
+                    Some(self.apply_transition(pool, transition))
                 } else {
                     None
                 }
@@ -286,19 +308,19 @@ impl TreeNode {
                 };
 
                 if res {
-                    Some(pool.new_from(self))
+                    Some(self.apply_transition(pool, transition))
                 } else {
                     None
                 }
             }
-            FlagDiacriticOperator::Clear => Some(self.update_flag(pool, op.feature, 0)),
+            FlagDiacriticOperator::Clear => Some(self.update_flag(pool, op.feature, 0, transition)),
             FlagDiacriticOperator::Unification => {
                 // if the feature is unset OR the feature is to this value already OR
                 // the feature is negatively set to something else than this value
                 let f = self.flag_state[op.feature as usize];
 
                 if f == 0 || f == op.value || (f < 0 && f * -1 != op.value) {
-                    Some(self.update_flag(pool, op.feature, op.value))
+                    Some(self.update_flag(pool, op.feature, op.value, transition))
                 } else {
                     None
                 }
