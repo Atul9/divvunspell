@@ -15,8 +15,7 @@ use std::hash::{Hash, Hasher, BuildHasher};
 
 
 const PRIMES: &[u8] = &[
-    1, //2,  
-    //3,  // 5,  7, 11, 13, 17, 19, 23, 29, //7487, 10627, 15569, 20149 
+    1, 2, 3,  // 5,  7, 11, 13, 17, 19, 23, 29, //7487, 10627, 15569, 20149 
 //    31,  37,  41,  43,  47,  53,  59,  61,  67,  71,
 //    73,  79,  83,  89,  97, 101, 103, 107, 109, 113,
 //   127, 131, 137, 139, 149, 151, 157, 163, 167, 173,
@@ -118,13 +117,14 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         max_weight: Weight,
         next_node: &TreeNode,
         nodes: &InverseBloomFilter<TreeNode>,
-    ) -> Vec<Recycled<'a, TreeNode>> {
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
+    ) {
         let lexicon = self.speller.lexicon();
         let operations = lexicon.alphabet().operations();
-        let mut output_nodes = Vec::new();
+        // let mut output_nodes = Vec::new();
 
         if !lexicon.has_epsilons_or_flags(next_node.lexicon_state + 1) {
-            return output_nodes;
+            return;
         }
 
         let mut next = lexicon.next(next_node.lexicon_state, 0).unwrap();
@@ -175,8 +175,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
 
             next += 1;
         }
-
-        output_nodes
     }
 
     fn mutator_epsilons<'a>(
@@ -185,14 +183,15 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         max_weight: Weight,
         next_node: &TreeNode,
         nodes: &InverseBloomFilter<TreeNode>,
-    ) -> Vec<Recycled<'a, TreeNode>> {
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
+    ) {
         let mutator = self.speller.mutator();
         let lexicon = self.speller.lexicon();
         let alphabet_translator = self.speller.alphabet_translator();
-        let mut output_nodes = Vec::new();
+        // let mut output_nodes = Vec::new();
 
         if !mutator.has_transitions(next_node.mutator_state + 1, Some(0)) {
-            return output_nodes;
+            return;
         }
 
         let mut next_m = mutator.next(next_node.mutator_state, 0).unwrap();
@@ -225,7 +224,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                             next_node.lexicon_state + 1,
                             lexicon.alphabet().unknown(),
                         ) {
-                            output_nodes.append(&mut self.queue_lexicon_arcs(
+                            self.queue_lexicon_arcs(
                                 pool,
                                 max_weight,
                                 &next_node,
@@ -234,14 +233,15 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 0,
-                            ));
+                                output_nodes,
+                            );
                         }
 
                         if lexicon.has_transitions(
                             next_node.lexicon_state + 1,
                             lexicon.alphabet().identity(),
                         ) {
-                            output_nodes.append(&mut self.queue_lexicon_arcs(
+                            self.queue_lexicon_arcs(
                                 pool,
                                 max_weight,
                                 &next_node,
@@ -250,7 +250,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 0,
-                            ));
+                                output_nodes,
+                            );
                         }
                     }
 
@@ -258,7 +259,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     continue;
                 }
 
-                output_nodes.append(&mut self.queue_lexicon_arcs(
+                self.queue_lexicon_arcs(
                     pool,
                     max_weight,
                     &next_node,
@@ -267,13 +268,12 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     transition.target().unwrap(),
                     transition.weight().unwrap(),
                     0,
-                ));
+                    output_nodes,
+                );
             }
 
             next_m += 1;
         }
-
-        output_nodes
     }
 
     pub fn queue_lexicon_arcs<'a>(
@@ -286,11 +286,12 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         mutator_state: u32,
         mutator_weight: Weight,
         input_increment: i16,
-    ) -> Vec<Recycled<'a, TreeNode>> {
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
+    ) {
         let lexicon = self.speller.lexicon();
         let identity = lexicon.alphabet().identity();
         let mut next = lexicon.next(next_node.lexicon_state, input_sym).unwrap();
-        let mut output_nodes: Vec<Recycled<'a, TreeNode>> = Vec::new();
+        // let mut output_nodes: Vec<Recycled<'a, TreeNode>> = Vec::new();
 
         while let Some(noneps_trans) = lexicon.take_non_epsilons(next, input_sym) {
             if let Some(mut sym) = noneps_trans.symbol() {
@@ -335,8 +336,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
 
             next += 1;
         }
-
-        output_nodes
     }
 
     fn queue_mutator_arcs<'a>(
@@ -346,11 +345,11 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         next_node: &TreeNode,
         nodes: &InverseBloomFilter<TreeNode>,
         input_sym: SymbolNumber,
-    ) -> Vec<Recycled<'a, TreeNode>> {
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
+    ) {
         let mutator = self.speller.mutator();
         let lexicon = self.speller.lexicon();
         let alphabet_translator = self.speller.alphabet_translator();
-        let mut output_nodes = Vec::new();
 
         let mut next_m = mutator.next(next_node.mutator_state, input_sym).unwrap();
 
@@ -387,7 +386,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                             next_node.lexicon_state + 1,
                             lexicon.alphabet().unknown(),
                         ) {
-                            output_nodes.append(&mut self.queue_lexicon_arcs(
+                            self.queue_lexicon_arcs(
                                 pool,
                                 max_weight,
                                 &next_node,
@@ -396,13 +395,14 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 1,
-                            ));
+                                output_nodes,
+                            );
                         }
                         if lexicon.has_transitions(
                             next_node.lexicon_state + 1,
                             lexicon.alphabet().identity(),
                         ) {
-                            output_nodes.append(&mut self.queue_lexicon_arcs(
+                            self.queue_lexicon_arcs(
                                 pool,
                                 max_weight,
                                 &next_node,
@@ -411,14 +411,15 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 1,
-                            ));
+                                output_nodes,
+                            );
                         }
                     }
                     next_m += 1;
                     continue;
                 }
 
-                output_nodes.append(&mut self.queue_lexicon_arcs(
+                self.queue_lexicon_arcs(
                     pool,
                     max_weight,
                     &next_node,
@@ -427,13 +428,12 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     transition.target().unwrap(),
                     transition.weight().unwrap(),
                     1,
-                ));
+                    output_nodes,
+                );
 
                 next_m += 1;
             }
         }
-
-        output_nodes
     }
 
     fn consume_input<'a>(
@@ -442,13 +442,13 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         max_weight: Weight,
         next_node: &TreeNode,
         nodes: &InverseBloomFilter<TreeNode>,
-    ) -> Vec<Recycled<'a, TreeNode>> {
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
+    ) {
         let mutator = self.speller.mutator();
         let input_state = next_node.input_state as usize;
-        let mut output_nodes = Vec::new();
 
         if input_state >= self.input.len() {
-            return output_nodes;
+            return;
         }
 
         let input_sym = self.input[input_state];
@@ -459,35 +459,33 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                 if mutator
                     .has_transitions(next_node.mutator_state + 1, mutator.alphabet().identity())
                 {
-                    output_nodes.append(&mut self.queue_mutator_arcs(
+                    self.queue_mutator_arcs(
                         pool,
                         max_weight,
                         &next_node,
                         nodes,
                         mutator.alphabet().identity().unwrap(),
-                    ));
+                        output_nodes,
+                    );
                 }
 
                 // Check for unknown transition
                 if mutator
                     .has_transitions(next_node.mutator_state + 1, mutator.alphabet().unknown())
                 {
-                    output_nodes.append(&mut self.queue_mutator_arcs(
+                    self.queue_mutator_arcs(
                         pool,
                         max_weight,
                         &next_node,
                         nodes,
                         mutator.alphabet().unknown().unwrap(),
-                    ));
+                        output_nodes,
+                    );
                 }
             }
         } else {
-            output_nodes.append(
-                &mut self.queue_mutator_arcs(pool, max_weight, &next_node, nodes, input_sym),
-            );
+            self.queue_mutator_arcs(pool, max_weight, &next_node, nodes, input_sym, output_nodes)
         }
-
-        output_nodes
     }
 
     fn lexicon_consume<'a>(
@@ -496,15 +494,15 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         max_weight: Weight,
         next_node: &TreeNode,
         nodes: &InverseBloomFilter<TreeNode>,
-    ) -> Vec<Recycled<'a, TreeNode>> {
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
+    ) {
         let mutator = self.speller.mutator();
         let lexicon = self.speller.lexicon();
         let alphabet_translator = self.speller.alphabet_translator();
         let input_state = next_node.input_state as usize;
-        let mut output_nodes = Vec::new();
 
         if input_state >= self.input.len() {
-            return output_nodes;
+            return;
         }
 
         let input_sym = alphabet_translator[self.input[input_state as usize] as usize];
@@ -515,7 +513,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             if input_sym >= lexicon.alphabet().initial_symbol_count() {
                 let identity = mutator.alphabet().identity();
                 if lexicon.has_transitions(next_lexicon_state, identity) {
-                    output_nodes.append(&mut self.queue_lexicon_arcs(
+                    self.queue_lexicon_arcs(
                         pool,
                         max_weight,
                         &next_node,
@@ -524,12 +522,13 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         next_node.mutator_state,
                         0.0,
                         1,
-                    ));
+                        output_nodes,
+                    );
                 }
 
                 let unknown = mutator.alphabet().unknown();
                 if lexicon.has_transitions(next_lexicon_state, unknown) {
-                    output_nodes.append(&mut self.queue_lexicon_arcs(
+                    self.queue_lexicon_arcs(
                         pool,
                         max_weight,
                         &next_node,
@@ -538,14 +537,15 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         next_node.mutator_state,
                         0.0,
                         1,
-                    ));
+                        output_nodes,
+                    );
                 }
             }
 
-            return output_nodes;
+            return;
         }
 
-        output_nodes.append(&mut self.queue_lexicon_arcs(
+        self.queue_lexicon_arcs(
             pool,
             max_weight,
             &next_node,
@@ -554,8 +554,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             next_node.mutator_state,
             0.0,
             1,
-        ));
-        output_nodes
+            output_nodes,
+        );
     }
 
     fn update_weight_limit(&self, best_weight: Weight, suggestions: &Vec<Suggestion>) -> Weight {
@@ -607,8 +607,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                 return true;
             }
 
-            nodes.append(&mut self.lexicon_epsilons(&pool, max_weight, &next_node, &seen_nodes));
-            nodes.append(&mut self.lexicon_consume(&pool, max_weight, &next_node, &seen_nodes));
+            self.lexicon_epsilons(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
+            self.lexicon_consume(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
 
             seen_nodes.add(next_node.key());
         }
@@ -645,18 +645,17 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                 rando += 1;
             }
 
-
             let max_weight = self.update_weight_limit(best_weight, &suggestions);
 
             if !self.is_under_weight_limit(max_weight, next_node.weight()) {
                 continue;
             }
 
-            nodes.append(&mut self.lexicon_epsilons(&pool, max_weight, &next_node, &seen_nodes));
-            nodes.append(&mut self.mutator_epsilons(&pool, max_weight, &next_node, &seen_nodes));
+            self.lexicon_epsilons(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
+            self.mutator_epsilons(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
 
             if next_node.input_state as usize != self.input.len() {
-                nodes.append(&mut self.consume_input(&pool, max_weight, &next_node, &seen_nodes));
+                &mut self.consume_input(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
                 continue;
             }
 
