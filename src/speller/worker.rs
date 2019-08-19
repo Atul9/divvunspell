@@ -629,14 +629,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut rando = 0;
 
         // let mut rando = self.config.seen_node_sample_rate;
-        loop {
-            let next_node = {
-                match nodes.pop() {
-                    Some(v) => v,
-                    None => break,
-                }
-            };
-
+        while let Some(next_node) = nodes.pop() {
             if rando == max_rando {
                 seen_nodes.add(next_node.key());
                 rando = 0;
@@ -712,7 +705,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
     ) -> Vec<Suggestion> {
         let mut c: Vec<Suggestion> = corrections
             .into_iter()
-            .map(|x| Suggestion::new(x.0.to_string(), *x.1))
+            .map(|x| Suggestion::new(x.0, *x.1))
             .collect();
 
         c.sort();
