@@ -217,7 +217,7 @@ impl ChfstTransducer {
         let meta_file = File::open(path.join("meta")).map_err(|_| {
             std::io::Error::new(
                 std::io::ErrorKind::NotFound,
-                "meta not found in transducer path",
+                format!("`meta` not found in transducer path, looked for {}", path.join("meta").display()),
             )
         })?;
         let meta: MetaRecord = serde_json::from_reader(meta_file)?;
