@@ -55,14 +55,12 @@ impl TransducerAlphabetParser {
         let feature: SmolStr = chunks
             .next()
             .unwrap_or("")
-            .to_string()
             .chars()
             .filter(|x| x != &'@')
             .collect();
         let value: SmolStr = chunks
             .next()
             .unwrap_or("")
-            .to_string()
             .chars()
             .filter(|x| x != &'@')
             .collect();

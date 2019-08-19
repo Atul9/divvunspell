@@ -1,6 +1,7 @@
 use hashbrown::{HashMap};
 use std::f32;
 use std::sync::Arc;
+use smol_str::SmolStr;
 
 use lifeguard::{Pool, Recycled};
 
@@ -624,8 +625,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut best_weight = self.config.max_weight.unwrap_or(f32::INFINITY);
 
         let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::with_capacity(2u64.pow(u32::from(self.config.seen_node_sample_rate)));
-        let mut next_rando = PRIMES.to_vec();
-        let mut max_rando = next_rando.pop().unwrap();
+        let mut next_rando = PRIMES.iter();
+        let mut max_rando = next_rando.next().copied().unwrap();
         let mut rando = 0;
 
         // let mut rando = self.config.seen_node_sample_rate;
@@ -633,7 +634,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             if rando == max_rando {
                 seen_nodes.add(next_node.key());
                 rando = 0;
-                max_rando = next_rando.pop().unwrap_or(1);
+                max_rando = next_rando.next().copied().unwrap_or(1);
             } else {
                 rando += 1;
             }
@@ -675,7 +676,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             }
 
             let key_table = self.speller.lexicon().alphabet().key_table();
-            let string: String = next_node
+            let string: SmolStr = next_node
                 .string
                 .iter()
                 .map(|s| &*key_table[*s as usize])
@@ -701,11 +702,11 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
 
     fn generate_sorted_suggestions(
         &self,
-        corrections: &HashMap<String, Weight>,
+        corrections: &HashMap<SmolStr, Weight>,
     ) -> Vec<Suggestion> {
         let mut c: Vec<Suggestion> = corrections
             .into_iter()
-            .map(|x| Suggestion::new(x.0, *x.1))
+            .map(|x| Suggestion::new(x.0.clone(), *x.1))
             .collect();
 
         c.sort();

@@ -11,7 +11,7 @@ pub struct Suggestion {
 }
 
 impl Suggestion {
-    pub fn new(value: impl Into<SmolStr>, weight: Weight) -> Suggestion {
+    pub fn new(value: SmolStr, weight: Weight) -> Suggestion {
         Suggestion {
             value: value.into(),
             weight,
