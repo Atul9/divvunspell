@@ -558,7 +558,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         );
     }
 
-    fn update_weight_limit(&self, best_weight: Weight, suggestions: &Vec<Suggestion>) -> Weight {
+    fn update_weight_limit(&self, best_weight: Weight, suggestions: &[Suggestion]) -> Weight {
         use std::cmp::Ordering::{Equal, Less};
 
         let c = &self.config;
