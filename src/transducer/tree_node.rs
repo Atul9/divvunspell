@@ -1,8 +1,6 @@
 use lifeguard::{Pool, Recycled};
 use std::hash::{Hash, Hasher};
 
-
-
 use super::symbol_transition::SymbolTransition;
 use crate::types::{
     FlagDiacriticOperation, FlagDiacriticOperator, FlagDiacriticState, SymbolNumber,
@@ -151,7 +149,7 @@ impl TreeNode {
             node.flag_state.truncate(0);
             node.flag_state.extend(&self.flag_state);
         }
-        
+
         node.weight = EqWeight(self.weight.0 + transition.weight().unwrap());
 
         node
@@ -175,7 +173,7 @@ impl TreeNode {
             node.flag_state.truncate(0);
             node.flag_state.extend(&self.flag_state);
         }
-        
+
         node.weight = EqWeight(self.weight.0 + transition.weight().unwrap());
         node
     }
@@ -190,7 +188,7 @@ impl TreeNode {
         weight: Weight,
     ) -> Recycled<'a, TreeNode> {
         let mut node = pool.new();
-        
+
         if node.string != self.string {
             node.string.truncate(0);
             node.string.extend(&self.string);
@@ -250,9 +248,9 @@ impl TreeNode {
     }
 
     pub fn apply_transition<'a>(
-        &self, 
+        &self,
         pool: &'a Pool<TreeNode>,
-        transition: &SymbolTransition
+        transition: &SymbolTransition,
     ) -> Recycled<'a, TreeNode> {
         let mut node = pool.new();
 

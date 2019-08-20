@@ -1,18 +1,22 @@
 extern crate divvunspell;
 
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Instant};
 
 use divvunspell::archive::SpellerArchive;
-use divvunspell::speller::suggestion::Suggestion;
+
 use divvunspell::speller::{Speller, SpellerConfig};
-use divvunspell::transducer::chunk::{ChfstBundle, ChfstTransducer};
+
 use divvunspell::transducer::HfstTransducer;
+
+fn run(speller: Arc<Speller<HfstTransducer>>, line: &TestLine, cfg: &SpellerConfig) {
+    let _ = speller.suggest_with_config(line.0, &cfg);
+}
 
 fn time_suggest(
     speller: Arc<Speller<HfstTransducer>>,
     line: &TestLine,
-    cfg: SpellerConfig,
+    cfg: &SpellerConfig,
 ) -> String {
     // println!("[!] Test: {}; Expected: {}; Orig. time: {}; Orig. results:\n    {}", line.0, line.1, line.2, line.3.join(", "));
 
@@ -294,7 +298,7 @@ fn main() {
     //     "leat", "dego", "vieljačagat"];
 
     // let correct: Vec<bool> = human_rights.iter().map(|w| speller.is_correct(w)).collect();
-    let cfg = SpellerConfig {
+    let mut cfg = SpellerConfig {
         max_weight: Some(100.0),
         n_best: Some(5),
         beam: None,
@@ -320,18 +324,23 @@ fn main() {
     // let aligned = SpellerArchive::new("./aligned-test.zhfst").unwrap();
     let speller = unaligned.speller();
 
-    let now = Instant::now();
-    for i in 14..20 {//14..=20 {
+    for i in 12..=20 {
+        //14..=20 {
         let now = Instant::now();
         for line in tuples.iter() {
-            let mut ncfg = cfg.clone();
-            ncfg.seen_node_sample_rate = i;
-            // println!("{}", 
-            time_suggest(Arc::clone(&speller), &line, ncfg);
+            // let mut ncfg = cfg.clone();
+            cfg.seen_node_sample_rate = i;
+            // println!("{}",
+            run(Arc::clone(&speller), &line, &cfg);
             // );
         }
         let then = now.elapsed();
-        println!("{}: {}.{}", 2u64.pow(i.into()), then.as_secs(), then.subsec_nanos() / 1000);
+        println!(
+            "{}: {}.{}",
+            2u64.pow(i.into()),
+            then.as_secs(),
+            then.subsec_nanos() / 1000
+        );
     }
 
     // std::thread::sleep(std::time::Duration::from_millis(10000));

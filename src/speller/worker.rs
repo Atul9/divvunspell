@@ -1,7 +1,7 @@
-use hashbrown::{HashMap};
+use hashbrown::HashMap;
+use smol_str::SmolStr;
 use std::f32;
 use std::sync::Arc;
-use smol_str::SmolStr;
 
 use lifeguard::{Pool, Recycled};
 
@@ -12,22 +12,21 @@ use crate::transducer::Transducer;
 use crate::types::{SpellerWorkerMode, SymbolNumber, Weight};
 
 use ahash::ABuildHasher;
-use std::hash::{Hash, Hasher, BuildHasher};
-
+use std::hash::{BuildHasher, Hash, Hasher};
 
 const PRIMES: &[u8] = &[
-    1, 2, 3,  // 5,  7, 11, 13, 17, 19, 23, 29, //7487, 10627, 15569, 20149
-//    31,  37,  41,  43,  47,  53,  59,  61,  67,  71,
-//    73,  79,  83,  89,  97, 101, 103, 107, 109, 113,
-//   127, 131, 137, 139, 149, 151, 157, 163, 167, 173,
-//   179, 181, 191, 193, 197, 199, 211, 223, 227, 229
+    1, 2,
+    3, // 5,  7, 11, 13, 17, 19, 23, 29, //7487, 10627, 15569, 20149
+      //    31,  37,  41,  43,  47,  53,  59,  61,  67,  71,
+      //    73,  79,  83,  89,  97, 101, 103, 107, 109, 113,
+      //   127, 131, 137, 139, 149, 151, 157, 163, 167, 173,
+      //   179, 181, 191, 193, 197, 199, 211, 223, 227, 229
 ];
-
 
 pub struct InverseBloomFilter<T> {
     array: Vec<Option<T>>,
     build_hasher: ABuildHasher,
-    capacity: u64
+    capacity: u64,
 }
 
 impl<T: Hash + Eq> InverseBloomFilter<T> {
@@ -39,9 +38,11 @@ impl<T: Hash + Eq> InverseBloomFilter<T> {
     #[inline(always)]
     pub fn with_capacity(capacity: u64) -> InverseBloomFilter<T> {
         InverseBloomFilter {
-            array: std::iter::from_fn(|| Some(None)).take(capacity as usize).collect(),
+            array: std::iter::from_fn(|| Some(None))
+                .take(capacity as usize)
+                .collect(),
             build_hasher: ABuildHasher::new(),
-            capacity
+            capacity,
         }
     }
 
@@ -61,13 +62,14 @@ impl<T: Hash + Eq> InverseBloomFilter<T> {
         let index = self.index_for_hash(item) as usize;
         match self.array[index] {
             None => false,
-            Some(ref v) => v == item
+            Some(ref v) => v == item,
         }
     }
 
     #[inline(always)]
     pub fn test_and_add(&mut self, item: T) -> bool {
-        let (old_item, new_item) = self.get_and_set(self.index_for_hash(&item) as usize, Some(item));
+        let (old_item, new_item) =
+            self.get_and_set(self.index_for_hash(&item) as usize, Some(item));
         &old_item == new_item
     }
 
@@ -173,7 +175,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                             continue;
                         }
 
-                        if let Some(applied_node) = next_node.apply_operation(pool, op, &transition) {
+                        if let Some(applied_node) = next_node.apply_operation(pool, op, &transition)
+                        {
                             // applied_node.update_lexicon_mut(&transition);
 
                             if !nodes.test(&applied_node) {
@@ -616,7 +619,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let pool = Pool::with_size_and_max(0, 0);
         let mut nodes = speller_start_node(&pool, self.state_size() as usize);
 
-        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::with_capacity(1_000_000);
+        let mut seen_nodes: InverseBloomFilter<TreeNode> =
+            InverseBloomFilter::with_capacity(1_000_000);
 
         while let Some(next_node) = nodes.pop() {
             if next_node.input_state as usize == self.input.len()
@@ -641,7 +645,9 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut suggestions: Vec<Suggestion> = vec![];
         let mut best_weight = self.config.max_weight.unwrap_or(f32::INFINITY);
 
-        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::with_capacity(2u64.pow(u32::from(self.config.seen_node_sample_rate)));
+        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::with_capacity(
+            2u64.pow(u32::from(self.config.seen_node_sample_rate)),
+        );
         let mut next_rando = PRIMES.iter();
         let mut max_rando = next_rando.next().copied().unwrap();
         let mut rando = 0;

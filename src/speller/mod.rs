@@ -2,10 +2,10 @@ pub mod suggestion;
 pub mod worker;
 
 use hashbrown::HashMap;
+use serde_derive::Serialize;
+use smol_str::SmolStr;
 use std::f32;
 use std::sync::Arc;
-use smol_str::SmolStr;
-use serde_derive::Serialize;
 
 use self::worker::SpellerWorker;
 use crate::speller::suggestion::Suggestion;
