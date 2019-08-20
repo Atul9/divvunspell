@@ -49,6 +49,6 @@ pub type Weight = f32;
 pub type FlagDiacriticState = Vec<i16>;
 
 pub enum SpellerWorkerMode {
-    Correct,
-    Unknown,
+    Correction,
+    Suggestion,
 }

@@ -87,7 +87,7 @@ impl<T: Transducer> Speller<T> {
         for word in words.into_iter() {
             let worker = SpellerWorker::new(
                 self.clone(),
-                SpellerWorkerMode::Unknown,
+                SpellerWorkerMode::Correction,
                 self.to_input_vec(&word),
                 SpellerConfig::default(),
             );
@@ -107,7 +107,7 @@ impl<T: Transducer> Speller<T> {
     fn suggest_single(self: Arc<Self>, word: &str, config: &SpellerConfig) -> Vec<Suggestion> {
         let worker = SpellerWorker::new(
             self.clone(),
-            SpellerWorkerMode::Correct,
+            SpellerWorkerMode::Suggestion,
             self.to_input_vec(word),
             config.clone(),
         );
@@ -128,7 +128,7 @@ impl<T: Transducer> Speller<T> {
         for word in words.into_iter() {
             let worker = SpellerWorker::new(
                 self.clone(),
-                SpellerWorkerMode::Correct,
+                SpellerWorkerMode::Suggestion,
                 self.to_input_vec(&word),
                 config.clone(),
             );
@@ -193,7 +193,7 @@ impl<T: Transducer> Speller<T> {
         for word in words.into_iter() {
             let worker = SpellerWorker::new(
                 self.clone(),
-                SpellerWorkerMode::Correct,
+                SpellerWorkerMode::Suggestion,
                 self.to_input_vec(&word),
                 config.clone(),
             );

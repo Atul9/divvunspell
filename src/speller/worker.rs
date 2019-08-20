@@ -14,15 +14,6 @@ use crate::types::{SpellerWorkerMode, SymbolNumber, Weight};
 use ahash::ABuildHasher;
 use std::hash::{BuildHasher, Hash, Hasher};
 
-const PRIMES: &[u8] = &[
-    1, 2,
-    3, // 5,  7, 11, 13, 17, 19, 23, 29, //7487, 10627, 15569, 20149
-      //    31,  37,  41,  43,  47,  53,  59,  61,  67,  71,
-      //    73,  79,  83,  89,  97, 101, 103, 107, 109, 113,
-      //   127, 131, 137, 139, 149, 151, 157, 163, 167, 173,
-      //   179, 181, 191, 193, 197, 199, 211, 223, 227, 229
-];
-
 pub struct InverseBloomFilter<T> {
     array: Vec<Option<T>>,
     build_hasher: ABuildHasher,
@@ -150,20 +141,10 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     if self
                         .is_under_weight_limit(max_weight, next_node.weight() + transition_weight)
                     {
-                        if let SpellerWorkerMode::Correct = self.mode {
-                            let epsilon_transition = transition.clone_with_epsilon_symbol();
+                        let new_node = next_node.update_lexicon(pool, transition);
 
-                            let new_node = next_node.update_lexicon(pool, epsilon_transition);
-
-                            if !nodes.test(&new_node) {
-                                output_nodes.push(new_node);
-                            }
-                        } else {
-                            let new_node = next_node.update_lexicon(pool, transition);
-
-                            if !nodes.test(&new_node) {
-                                output_nodes.push(new_node);
-                            }
+                        if !nodes.test(&new_node) {
+                            output_nodes.push(new_node);
                         }
                     }
                 } else {
@@ -177,8 +158,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
 
                         if let Some(applied_node) = next_node.apply_operation(pool, op, &transition)
                         {
-                            // applied_node.update_lexicon_mut(&transition);
-
                             if !nodes.test(&applied_node) {
                                 output_nodes.push(applied_node);
                             }
@@ -318,35 +297,23 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     }
                 }
 
-                let next_sym = match self.mode {
-                    SpellerWorkerMode::Correct => input_sym,
-                    _ => sym,
-                };
+                let is_under_weight_limit = self.is_under_weight_limit(
+                    max_weight,
+                    next_node.weight() + noneps_trans.weight().unwrap() + mutator_weight,
+                );
 
-                let can_push = match self.mode {
-                    SpellerWorkerMode::Correct => self.is_under_weight_limit(
-                        max_weight,
-                        noneps_trans.weight().unwrap() + mutator_weight,
-                    ),
-                    _ => self.is_under_weight_limit(
-                        max_weight,
-                        next_node.weight() + noneps_trans.weight().unwrap() + mutator_weight,
-                    ),
-                };
-
-                if can_push {
+                if is_under_weight_limit {
                     let new_node = next_node.update(
                         pool,
-                        next_sym,
+                        sym,
                         Some(next_node.input_state + input_increment as u32),
                         mutator_state,
                         noneps_trans.target().unwrap(),
                         noneps_trans.weight().unwrap() + mutator_weight,
                     );
 
-                    if !nodes.test(&new_node) {
-                        output_nodes.push(new_node);
-                    }
+                    // Testing against seen nodes causes non-determinism here
+                    output_nodes.push(new_node);
                 }
             }
 
@@ -648,19 +615,9 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::with_capacity(
             2u64.pow(u32::from(self.config.seen_node_sample_rate)),
         );
-        let mut next_rando = PRIMES.iter();
-        let mut max_rando = next_rando.next().copied().unwrap();
-        let mut rando = 0;
 
-        // let mut rando = self.config.seen_node_sample_rate;
         while let Some(next_node) = nodes.pop() {
-            if rando == max_rando {
-                seen_nodes.add(next_node.key());
-                rando = 0;
-                max_rando = next_rando.next().copied().unwrap_or(1);
-            } else {
-                rando += 1;
-            }
+            seen_nodes.add(next_node.key());
 
             let max_weight = self.update_weight_limit(best_weight, &suggestions);
 
