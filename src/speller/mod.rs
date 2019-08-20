@@ -5,13 +5,14 @@ use hashbrown::HashMap;
 use std::f32;
 use std::sync::Arc;
 use smol_str::SmolStr;
+use serde_derive::Serialize;
 
 use self::worker::SpellerWorker;
 use crate::speller::suggestion::Suggestion;
 use crate::transducer::Transducer;
 use crate::types::{SpellerWorkerMode, SymbolNumber, Weight};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 pub struct SpellerConfig {
     pub n_best: Option<usize>,
     pub max_weight: Option<Weight>,
