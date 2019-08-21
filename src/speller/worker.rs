@@ -23,7 +23,7 @@ pub struct InverseBloomFilter<T> {
 impl<T: Hash + Eq> InverseBloomFilter<T> {
     #[inline(always)]
     pub fn new() -> InverseBloomFilter<T> {
-        InverseBloomFilter::with_capacity(1_048_576)
+        InverseBloomFilter::with_capacity(24_576)
     }
 
     #[inline(always)]
@@ -155,9 +155,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
 
                         if let Some(applied_node) = next_node.apply_operation(pool, op, &transition)
                         {
-                            if !nodes.test(&applied_node) {
-                                output_nodes.push(applied_node);
-                            }
+                            // This must not be bloom filtered or we get missing results
+                            output_nodes.push(applied_node);
                         }
                     }
                 }
@@ -546,11 +545,9 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             };
         }
 
-        if let Some(n) = c.n_best {
-            if suggestions.len() >= n {
-                if let Some(sugg) = suggestions.last() {
-                    return sugg.weight();
-                }
+        if c.n_best.is_some() {
+            if let Some(sugg) = suggestions.last() {
+                return sugg.weight();
             }
         }
 
@@ -573,7 +570,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut nodes = speller_start_node(&pool, self.state_size() as usize);
 
         let mut seen_nodes: InverseBloomFilter<TreeNode> =
-            InverseBloomFilter::with_capacity(1_000_000);
+            InverseBloomFilter::new();
 
         while let Some(next_node) = nodes.pop() {
             if next_node.input_state as usize == self.input.len()
@@ -598,9 +595,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut suggestions: Vec<Suggestion> = vec![];
         let mut best_weight = self.config.max_weight.unwrap_or(f32::INFINITY);
 
-        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::with_capacity(
-            2u64.pow(u32::from(self.config.seen_node_sample_rate)),
-        );
+        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::new();
 
         while let Some(next_node) = nodes.pop() {
             seen_nodes.add(next_node.key());

@@ -20,7 +20,7 @@ pub struct SpellerConfig {
     pub with_caps: bool,
     pub pool_start: usize,
     pub pool_max: usize,
-    pub seen_node_sample_rate: u8,
+    pub seen_node_sample_rate: u64,
 }
 
 impl SpellerConfig {
