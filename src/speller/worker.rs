@@ -9,7 +9,7 @@ use super::{Speller, SpellerConfig};
 use crate::speller::suggestion::Suggestion;
 use crate::transducer::tree_node::TreeNode;
 use crate::transducer::Transducer;
-use crate::types::{SpellerWorkerMode, SymbolNumber, Weight};
+use crate::types::{SymbolNumber, Weight};
 
 use ahash::ABuildHasher;
 use std::hash::{BuildHasher, Hash, Hasher};
@@ -94,7 +94,6 @@ fn speller_max_weight(config: &SpellerConfig) -> Weight {
 pub struct SpellerWorker<T: Transducer> {
     speller: Arc<Speller<T>>,
     input: Vec<SymbolNumber>,
-    mode: SpellerWorkerMode,
     config: SpellerConfig,
 }
 
@@ -102,7 +101,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
     #[inline(always)]
     pub fn new(
         speller: Arc<Speller<T>>,
-        mode: SpellerWorkerMode,
         input: Vec<SymbolNumber>,
         config: SpellerConfig,
     ) -> Arc<SpellerWorker<T>> {
@@ -222,7 +220,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 pool,
                                 max_weight,
                                 &next_node,
-                                nodes,
                                 lexicon.alphabet().unknown().unwrap(),
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
@@ -239,7 +236,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 pool,
                                 max_weight,
                                 &next_node,
-                                nodes,
                                 lexicon.alphabet().identity().unwrap(),
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
@@ -257,7 +253,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     pool,
                     max_weight,
                     &next_node,
-                    nodes,
                     trans_sym,
                     transition.target().unwrap(),
                     transition.weight().unwrap(),
@@ -276,7 +271,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         pool: &'a Pool<TreeNode>,
         max_weight: Weight,
         next_node: &TreeNode,
-        nodes: &InverseBloomFilter<TreeNode>,
         input_sym: SymbolNumber,
         mutator_state: u32,
         mutator_weight: Weight,
@@ -374,7 +368,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 pool,
                                 max_weight,
                                 &next_node,
-                                nodes,
                                 lexicon.alphabet().unknown().unwrap(),
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
@@ -390,7 +383,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 pool,
                                 max_weight,
                                 &next_node,
-                                nodes,
                                 lexicon.alphabet().identity().unwrap(),
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
@@ -407,7 +399,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     pool,
                     max_weight,
                     &next_node,
-                    nodes,
                     trans_sym,
                     transition.target().unwrap(),
                     transition.weight().unwrap(),
@@ -503,7 +494,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         pool,
                         max_weight,
                         &next_node,
-                        nodes,
                         identity.unwrap(),
                         next_node.mutator_state,
                         0.0,
@@ -518,7 +508,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         pool,
                         max_weight,
                         &next_node,
-                        nodes,
                         unknown.unwrap(),
                         next_node.mutator_state,
                         0.0,
@@ -535,7 +524,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             pool,
             max_weight,
             &next_node,
-            nodes,
             input_sym,
             next_node.mutator_state,
             0.0,

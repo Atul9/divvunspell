@@ -10,7 +10,7 @@ use std::sync::Arc;
 use self::worker::SpellerWorker;
 use crate::speller::suggestion::Suggestion;
 use crate::transducer::Transducer;
-use crate::types::{SpellerWorkerMode, SymbolNumber, Weight};
+use crate::types::{SymbolNumber, Weight};
 
 #[derive(Clone, Debug, Serialize)]
 pub struct SpellerConfig {
@@ -87,7 +87,6 @@ impl<T: Transducer> Speller<T> {
         for word in words.into_iter() {
             let worker = SpellerWorker::new(
                 self.clone(),
-                SpellerWorkerMode::Correction,
                 self.to_input_vec(&word),
                 SpellerConfig::default(),
             );
@@ -107,7 +106,6 @@ impl<T: Transducer> Speller<T> {
     fn suggest_single(self: Arc<Self>, word: &str, config: &SpellerConfig) -> Vec<Suggestion> {
         let worker = SpellerWorker::new(
             self.clone(),
-            SpellerWorkerMode::Suggestion,
             self.to_input_vec(word),
             config.clone(),
         );
@@ -128,7 +126,6 @@ impl<T: Transducer> Speller<T> {
         for word in words.into_iter() {
             let worker = SpellerWorker::new(
                 self.clone(),
-                SpellerWorkerMode::Suggestion,
                 self.to_input_vec(&word),
                 config.clone(),
             );
@@ -193,7 +190,6 @@ impl<T: Transducer> Speller<T> {
         for word in words.into_iter() {
             let worker = SpellerWorker::new(
                 self.clone(),
-                SpellerWorkerMode::Suggestion,
                 self.to_input_vec(&word),
                 config.clone(),
             );
