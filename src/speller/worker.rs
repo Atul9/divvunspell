@@ -107,7 +107,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         Arc::new(SpellerWorker {
             speller,
             input,
-            mode,
             config,
         })
     }
@@ -470,7 +469,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         pool: &'a Pool<TreeNode>,
         max_weight: Weight,
         next_node: &TreeNode,
-        nodes: &InverseBloomFilter<TreeNode>,
         output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let mutator = self.speller.mutator();
@@ -585,7 +583,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             }
 
             self.lexicon_epsilons(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
-            self.lexicon_consume(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
+            self.lexicon_consume(&pool, max_weight, &next_node, &mut nodes);
 
             seen_nodes.add(next_node.key());
         }
