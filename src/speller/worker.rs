@@ -19,73 +19,6 @@ fn speller_start_node(pool: &Pool<TreeNode>, size: usize) -> Vec<Recycled<TreeNo
     nodes
 }
 
-use ahash::ABuildHasher;
-use std::hash::{BuildHasher, Hash, Hasher};
-
-pub struct InverseBloomFilter<T> {
-    array: Vec<Option<T>>,
-    build_hasher: ABuildHasher,
-    capacity: u64,
-}
-
-impl<T: Hash + Eq> InverseBloomFilter<T> {
-    #[inline(always)]
-    pub fn new() -> InverseBloomFilter<T> {
-        InverseBloomFilter::with_capacity(24_576)
-    }
-
-    #[inline(always)]
-    pub fn with_capacity(capacity: u64) -> InverseBloomFilter<T> {
-        InverseBloomFilter {
-            array: std::iter::from_fn(|| Some(None))
-                .take(capacity as usize)
-                .collect(),
-            build_hasher: ABuildHasher::new(),
-            capacity,
-        }
-    }
-
-    #[inline(always)]
-    pub fn capacity(&self) -> u64 {
-        self.capacity
-    }
-
-    #[inline(always)]
-    pub fn add(&mut self, item: T) {
-        let index = self.index_for_hash(&item) as usize;
-        self.array[index] = Some(item);
-    }
-
-    #[inline(always)]
-    pub fn test(&self, item: &T) -> bool {
-        let index = self.index_for_hash(item) as usize;
-        match self.array[index] {
-            None => false,
-            Some(ref v) => v == item,
-        }
-    }
-
-    #[inline(always)]
-    pub fn test_and_add(&mut self, item: T) -> bool {
-        let (old_item, new_item) =
-            self.get_and_set(self.index_for_hash(&item) as usize, Some(item));
-        &old_item == new_item
-    }
-
-    #[inline(always)]
-    fn index_for_hash(&self, item: &T) -> u64 {
-        let mut hasher = self.build_hasher.build_hasher();
-        item.hash(&mut hasher);
-        hasher.finish() % self.capacity
-    }
-
-    #[inline(always)]
-    fn get_and_set(&mut self, index: usize, item: Option<T>) -> (Option<T>, &Option<T>) {
-        let old_item = std::mem::replace(&mut self.array[index], item);
-        (old_item, &self.array[index])
-    }
-}
-
 #[inline(always)]
 fn speller_max_weight(config: &SpellerConfig) -> Weight {
     config.max_weight.unwrap_or(f32::MAX)
@@ -571,14 +504,9 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut corrections = HashMap::new();
         let mut suggestions: Vec<Suggestion> = vec![];
         let mut best_weight = self.config.max_weight.unwrap_or(f32::MAX);
-        let mut seen_nodes = InverseBloomFilter::new();
         let key_table = self.speller.lexicon().alphabet().key_table();
 
         while let Some(next_node) = nodes.pop() {
-            if seen_nodes.test_and_add(next_node.key()) {
-                continue;
-            }
-
             let max_weight = self.update_weight_limit(best_weight, &suggestions);
 
             if !self.is_under_weight_limit(max_weight, next_node.weight()) {
