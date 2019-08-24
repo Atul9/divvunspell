@@ -9,7 +9,6 @@ use crate::types::{
 };
 
 #[derive(Debug, Clone)]
-#[repr(C)]
 pub struct TreeNode {
     pub lexicon_state: TransitionTableIndex,
     pub mutator_state: TransitionTableIndex,
