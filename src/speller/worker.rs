@@ -21,7 +21,7 @@ fn speller_start_node(pool: &Pool<TreeNode>, size: usize) -> Vec<Recycled<TreeNo
 
 #[inline(always)]
 fn speller_max_weight(config: &SpellerConfig) -> Weight {
-    config.max_weight.unwrap_or(f32::INFINITY)
+    config.max_weight.unwrap_or(f32::MAX)
 }
 
 pub struct SpellerWorker<T: Transducer> {
@@ -449,7 +449,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         use std::cmp::Ordering::{Equal, Less};
 
         let c = &self.config;
-        let mut max_weight = c.max_weight.unwrap_or(f32::INFINITY);
+        let mut max_weight = c.max_weight.unwrap_or(f32::MAX);
 
         if let Some(beam) = c.beam {
             let candidate_weight = best_weight + beam;
@@ -503,7 +503,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut nodes = speller_start_node(&pool, self.state_size() as usize);
         let mut corrections = HashMap::new();
         let mut suggestions: Vec<Suggestion> = vec![];
-        let mut best_weight = self.config.max_weight.unwrap_or(f32::INFINITY);
+        let mut best_weight = self.config.max_weight.unwrap_or(f32::MAX);
 
         while let Some(next_node) = nodes.pop() {
             let max_weight = self.update_weight_limit(best_weight, &suggestions);
