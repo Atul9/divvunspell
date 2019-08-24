@@ -83,6 +83,8 @@ struct Summary {
     only_wrong: u32,
     slowest_lookup: Time,
     fastest_lookup: Time,
+    average_time: Time,
+    average_time_95pc: Time,
 }
 
 impl std::fmt::Display for Summary {
@@ -92,7 +94,7 @@ impl std::fmt::Display for Summary {
 
         write!(
             f,
-            "[#1] {} [>5] {} [any] {} [none] {} [wrong] {} [fast] {} [slow] {}",
+            "[#1] {} [^5] {} [any] {} [none] {} [wrong] {} [fast] {} [slow] {}",
             percent(self.first_position),
             percent(self.top_five),
             percent(self.any_position),

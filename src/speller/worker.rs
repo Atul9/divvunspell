@@ -11,79 +11,6 @@ use crate::transducer::tree_node::TreeNode;
 use crate::transducer::Transducer;
 use crate::types::{SymbolNumber, Weight};
 
-use ahash::ABuildHasher;
-use std::hash::{BuildHasher, Hash, Hasher};
-
-const PRIMES: &[u8] = &[
-    1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89,
-    // 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191,
-    // 193, 197, 199, 211, 223, 227, 229,
-];
-
-pub struct InverseBloomFilter<T> {
-    array: Vec<Option<T>>,
-    build_hasher: ABuildHasher,
-    capacity: u64,
-}
-
-impl<T: Hash + Eq> InverseBloomFilter<T> {
-    #[inline(always)]
-    pub fn new() -> InverseBloomFilter<T> {
-        InverseBloomFilter::with_capacity(24_576)
-    }
-
-    #[inline(always)]
-    pub fn with_capacity(capacity: u64) -> InverseBloomFilter<T> {
-        InverseBloomFilter {
-            array: std::iter::from_fn(|| Some(None))
-                .take(capacity as usize)
-                .collect(),
-            build_hasher: ABuildHasher::new(),
-            capacity,
-        }
-    }
-
-    #[inline(always)]
-    pub fn capacity(&self) -> u64 {
-        self.capacity
-    }
-
-    #[inline(always)]
-    pub fn add(&mut self, item: T) {
-        let index = self.index_for_hash(&item) as usize;
-        self.array[index] = Some(item);
-    }
-
-    #[inline(always)]
-    pub fn test(&self, item: &T) -> bool {
-        let index = self.index_for_hash(item) as usize;
-        match self.array[index] {
-            None => false,
-            Some(ref v) => v == item,
-        }
-    }
-
-    #[inline(always)]
-    pub fn test_and_add(&mut self, item: T) -> bool {
-        let (old_item, new_item) =
-            self.get_and_set(self.index_for_hash(&item) as usize, Some(item));
-        &old_item == new_item
-    }
-
-    #[inline(always)]
-    fn index_for_hash(&self, item: &T) -> u64 {
-        let mut hasher = self.build_hasher.build_hasher();
-        item.hash(&mut hasher);
-        hasher.finish() % self.capacity
-    }
-
-    #[inline(always)]
-    fn get_and_set(&mut self, index: usize, item: Option<T>) -> (Option<T>, &Option<T>) {
-        let old_item = std::mem::replace(&mut self.array[index], item);
-        (old_item, &self.array[index])
-    }
-}
-
 #[inline(always)]
 fn speller_start_node(pool: &Pool<TreeNode>, size: usize) -> Vec<Recycled<TreeNode>> {
     let start_node = TreeNode::empty(pool, vec![0; size]);
@@ -123,12 +50,10 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         pool: &'a Pool<TreeNode>,
         max_weight: Weight,
         next_node: &TreeNode,
-        nodes: &InverseBloomFilter<TreeNode>,
         output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let lexicon = self.speller.lexicon();
         let operations = lexicon.alphabet().operations();
-        // let mut output_nodes = Vec::new();
 
         if !lexicon.has_epsilons_or_flags(next_node.lexicon_state + 1) {
             return;
@@ -145,10 +70,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         .is_under_weight_limit(max_weight, next_node.weight() + transition_weight)
                     {
                         let new_node = next_node.update_lexicon(pool, transition);
-
-                        if !nodes.test(&new_node) {
-                            output_nodes.push(new_node);
-                        }
+                        output_nodes.push(new_node);
                     }
                 } else {
                     let operation = operations.get(&sym);
@@ -161,9 +83,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
 
                         if let Some(applied_node) = next_node.apply_operation(pool, op, &transition)
                         {
-                            if !nodes.test(&applied_node) {
-                                output_nodes.push(applied_node);
-                            }
+                            output_nodes.push(applied_node);
                         }
                     }
                 }
@@ -179,13 +99,11 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         pool: &'a Pool<TreeNode>,
         max_weight: Weight,
         next_node: &TreeNode,
-        nodes: &InverseBloomFilter<TreeNode>,
         output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let mutator = self.speller.mutator();
         let lexicon = self.speller.lexicon();
         let alphabet_translator = self.speller.alphabet_translator();
-        // let mut output_nodes = Vec::new();
 
         if !mutator.has_transitions(next_node.mutator_state + 1, Some(0)) {
             return;
@@ -200,9 +118,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     next_node.weight() + transition.weight().unwrap(),
                 ) {
                     let new_node = next_node.update_mutator(pool, transition);
-                    if !nodes.test(&new_node) {
-                        output_nodes.push(new_node);
-                    }
+                    output_nodes.push(new_node);
                 }
 
                 next_m += 1;
@@ -229,7 +145,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 0,
-                                nodes,
                                 output_nodes,
                             );
                         }
@@ -246,7 +161,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 0,
-                                nodes,
                                 output_nodes,
                             );
                         }
@@ -264,7 +178,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     transition.target().unwrap(),
                     transition.weight().unwrap(),
                     0,
-                    nodes,
                     output_nodes,
                 );
             }
@@ -283,13 +196,11 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         mutator_state: u32,
         mutator_weight: Weight,
         input_increment: i16,
-        nodes: &InverseBloomFilter<TreeNode>,
         output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let lexicon = self.speller.lexicon();
         let identity = lexicon.alphabet().identity();
         let mut next = lexicon.next(next_node.lexicon_state, input_sym).unwrap();
-        // let mut output_nodes: Vec<Recycled<'a, TreeNode>> = Vec::new();
 
         while let Some(noneps_trans) = lexicon.take_non_epsilons(next, input_sym) {
             if let Some(mut sym) = noneps_trans.symbol() {
@@ -315,9 +226,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         noneps_trans.weight().unwrap() + mutator_weight,
                     );
 
-                    if !nodes.test(&new_node) {
-                        output_nodes.push(new_node);
-                    }
+                    output_nodes.push(new_node);
                 }
             }
 
@@ -331,7 +240,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         pool: &'a Pool<TreeNode>,
         max_weight: Weight,
         next_node: &TreeNode,
-        nodes: &InverseBloomFilter<TreeNode>,
         input_sym: SymbolNumber,
         output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
@@ -356,9 +264,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         transition_weight,
                     );
 
-                    if !nodes.test(&new_node) {
-                        output_nodes.push(new_node);
-                    }
+                    output_nodes.push(new_node);
                 }
 
                 next_m += 1;
@@ -382,7 +288,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 1,
-                                nodes,
                                 output_nodes,
                             );
                         }
@@ -398,7 +303,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 1,
-                                nodes,
                                 output_nodes,
                             );
                         }
@@ -415,7 +319,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     transition.target().unwrap(),
                     transition.weight().unwrap(),
                     1,
-                    nodes,
                     output_nodes,
                 );
 
@@ -430,7 +333,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         pool: &'a Pool<TreeNode>,
         max_weight: Weight,
         next_node: &TreeNode,
-        nodes: &InverseBloomFilter<TreeNode>,
         output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let mutator = self.speller.mutator();
@@ -452,7 +354,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         pool,
                         max_weight,
                         &next_node,
-                        nodes,
                         mutator.alphabet().identity().unwrap(),
                         output_nodes,
                     );
@@ -466,14 +367,13 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         pool,
                         max_weight,
                         &next_node,
-                        nodes,
                         mutator.alphabet().unknown().unwrap(),
                         output_nodes,
                     );
                 }
             }
         } else {
-            self.queue_mutator_arcs(pool, max_weight, &next_node, nodes, input_sym, output_nodes)
+            self.queue_mutator_arcs(pool, max_weight, &next_node, input_sym, output_nodes)
         }
     }
 
@@ -483,7 +383,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         pool: &'a Pool<TreeNode>,
         max_weight: Weight,
         next_node: &TreeNode,
-        nodes: &InverseBloomFilter<TreeNode>,
         output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let mutator = self.speller.mutator();
@@ -511,7 +410,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         next_node.mutator_state,
                         0.0,
                         1,
-                        nodes,
                         output_nodes,
                     );
                 }
@@ -526,7 +424,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         next_node.mutator_state,
                         0.0,
                         1,
-                        nodes,
                         output_nodes,
                     );
                 }
@@ -543,7 +440,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             next_node.mutator_state,
             0.0,
             1,
-            nodes,
             output_nodes,
         );
     }
@@ -588,8 +484,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let pool = Pool::with_size_and_max(0, 0);
         let mut nodes = speller_start_node(&pool, self.state_size() as usize);
 
-        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::new();
-
         while let Some(next_node) = nodes.pop() {
             if next_node.input_state as usize == self.input.len()
                 && self.speller.lexicon().is_final(next_node.lexicon_state)
@@ -597,10 +491,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                 return true;
             }
 
-            self.lexicon_epsilons(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
-            self.lexicon_consume(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
-
-            seen_nodes.add(next_node.key());
+            self.lexicon_epsilons(&pool, max_weight, &next_node, &mut nodes);
+            self.lexicon_consume(&pool, max_weight, &next_node, &mut nodes);
         }
 
         false
@@ -613,32 +505,18 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut suggestions: Vec<Suggestion> = vec![];
         let mut best_weight = self.config.max_weight.unwrap_or(f32::INFINITY);
 
-        let mut next_rando = PRIMES.iter().rev();
-        let mut max_rando = next_rando.next().copied().unwrap();
-        let mut rando = 0;
-
-        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::new();
-
         while let Some(next_node) = nodes.pop() {
-            if rando == max_rando {
-                seen_nodes.add(next_node.key());
-                rando = 0;
-                max_rando = next_rando.next().copied().unwrap_or(0);
-            } else {
-                rando += 1;
-            }
-
             let max_weight = self.update_weight_limit(best_weight, &suggestions);
 
             if !self.is_under_weight_limit(max_weight, next_node.weight()) {
                 continue;
             }
 
-            self.lexicon_epsilons(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
-            self.mutator_epsilons(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
+            self.lexicon_epsilons(&pool, max_weight, &next_node, &mut nodes);
+            self.mutator_epsilons(&pool, max_weight, &next_node, &mut nodes);
 
             if next_node.input_state as usize != self.input.len() {
-                self.consume_input(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
+                self.consume_input(&pool, max_weight, &next_node, &mut nodes);
                 continue;
             }
 
