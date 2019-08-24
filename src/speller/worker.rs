@@ -504,6 +504,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut corrections = HashMap::new();
         let mut suggestions: Vec<Suggestion> = vec![];
         let mut best_weight = self.config.max_weight.unwrap_or(f32::MAX);
+        let key_table = self.speller.lexicon().alphabet().key_table();
 
         while let Some(next_node) = nodes.pop() {
             let max_weight = self.update_weight_limit(best_weight, &suggestions);
@@ -541,8 +542,6 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             if !self.is_under_weight_limit(max_weight, weight) {
                 continue;
             }
-
-            let key_table = self.speller.lexicon().alphabet().key_table();
             let string: SmolStr = next_node
                 .string
                 .iter()
