@@ -1,5 +1,6 @@
 use lifeguard::{Pool, Recycled};
 use std::hash::{Hash, Hasher};
+use std::cmp::Ordering;
 
 use super::symbol_transition::SymbolTransition;
 use crate::types::{
@@ -8,13 +9,14 @@ use crate::types::{
 };
 
 #[derive(Debug, Clone)]
+#[repr(C)]
 pub struct TreeNode {
-    pub string: Vec<SymbolNumber>,
-    pub flag_state: FlagDiacriticState,
-    pub weight: f32,
-    pub input_state: u32,
-    pub mutator_state: TransitionTableIndex,
     pub lexicon_state: TransitionTableIndex,
+    pub mutator_state: TransitionTableIndex,
+    pub input_state: u32,
+    pub weight: f32,
+    pub flag_state: FlagDiacriticState,
+    pub string: Vec<SymbolNumber>,
 }
 
 impl TreeNode {
@@ -25,25 +27,24 @@ impl TreeNode {
 }
 
 impl std::cmp::PartialEq for TreeNode {
-    // This equality implementation is purposely not entirely correct. It is much faster this way.
-    // The idea is that the seen_nodes hashset has to do a lot less work, and even if we miss a bunch,
-    // memory pressure is significantly lowered
     fn eq(&self, other: &TreeNode) -> bool {
         self.lexicon_state == other.lexicon_state
             && self.mutator_state == other.mutator_state
             && self.input_state == other.input_state
+            && self.weight == other.weight
+            && self.flag_state == other.flag_state
             && self.string == other.string
     }
 }
-
-use std::cmp::Ordering;
 
 impl std::cmp::Ord for TreeNode {
     fn cmp(&self, other: &Self) -> Ordering {
         if self.weight < other.weight {
             return Ordering::Less;
-        } else {
+        } else if self.weight > other.weight {
             return Ordering::Greater;
+        } else {
+            return self.string.cmp(&other.string)
         }
     }
 }
@@ -95,7 +96,7 @@ impl lifeguard::InitializeWith<&TreeNode> for TreeNode {
 
         if self.flag_state != source.flag_state {
             self.flag_state.truncate(0);
-            self.flag_state.extend(&source.flag_state);
+            self.flag_state.extend_from_slice(&source.flag_state.as_slice());
         }
 
         self.weight = source.weight;
@@ -153,7 +154,7 @@ impl TreeNode {
 
         if node.flag_state != self.flag_state {
             node.flag_state.truncate(0);
-            node.flag_state.extend(&self.flag_state);
+            node.flag_state.extend_from_slice(&self.flag_state.as_slice());
         }
 
         node.weight = self.weight + transition.weight().unwrap();
@@ -178,7 +179,7 @@ impl TreeNode {
 
         if node.flag_state != self.flag_state {
             node.flag_state.truncate(0);
-            node.flag_state.extend(&self.flag_state);
+            node.flag_state.extend_from_slice(&self.flag_state.as_slice());
         }
 
         node.weight = self.weight + transition.weight().unwrap();
@@ -211,7 +212,7 @@ impl TreeNode {
 
         if node.flag_state != self.flag_state {
             node.flag_state.truncate(0);
-            node.flag_state.extend(&self.flag_state);
+            node.flag_state.extend_from_slice(&self.flag_state.as_slice());
         }
 
         node.weight = self.weight + weight;
@@ -257,7 +258,7 @@ impl TreeNode {
 
         if node.flag_state != self.flag_state {
             node.flag_state.truncate(0);
-            node.flag_state.extend(&self.flag_state);
+            node.flag_state.extend_from_slice(&self.flag_state.as_slice());
         }
 
         node.weight = self.weight + transition.weight().unwrap();

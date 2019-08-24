@@ -87,9 +87,8 @@ struct Summary {
 
 impl std::fmt::Display for Summary {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> Result<(), std::fmt::Error> {
-        let percent = |v: u32| -> String {
-            format!("{:.2}%", v as f32 / self.total_words as f32 * 100f32)
-        };
+        let percent =
+            |v: u32| -> String { format!("{:.2}%", v as f32 / self.total_words as f32 * 100f32) };
 
         write!(
             f,
@@ -118,7 +117,7 @@ impl Summary {
                 if position == 0 {
                     summary.first_position += 1;
                 }
-                
+
                 if position < 5 {
                     summary.top_five += 1;
                 }
@@ -272,7 +271,6 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Writing JSON report…");
         serde_json::to_writer_pretty(output, &report)?;
     };
-
 
     println!("Done!");
     Ok(())

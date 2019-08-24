@@ -1,6 +1,5 @@
 use hashbrown::HashMap;
 use smol_str::SmolStr;
-use std::collections::BinaryHeap;
 use std::f32;
 use std::sync::Arc;
 
@@ -14,6 +13,12 @@ use crate::types::{SymbolNumber, Weight};
 
 use ahash::ABuildHasher;
 use std::hash::{BuildHasher, Hash, Hasher};
+
+const PRIMES: &[u8] = &[
+    1, 2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89,
+    // 97, 101, 103, 107, 109, 113, 127, 131, 137, 139, 149, 151, 157, 163, 167, 173, 179, 181, 191,
+    // 193, 197, 199, 211, 223, 227, 229,
+];
 
 pub struct InverseBloomFilter<T> {
     array: Vec<Option<T>>,
@@ -80,9 +85,9 @@ impl<T: Hash + Eq> InverseBloomFilter<T> {
 }
 
 #[inline(always)]
-fn speller_start_node(pool: &Pool<TreeNode>, size: usize) -> BinaryHeap<Recycled<TreeNode>> {
+fn speller_start_node(pool: &Pool<TreeNode>, size: usize) -> Vec<Recycled<TreeNode>> {
     let start_node = TreeNode::empty(pool, vec![0; size]);
-    let mut nodes = BinaryHeap::with_capacity(256);
+    let mut nodes = Vec::with_capacity(256);
     nodes.push(start_node);
     nodes
 }
@@ -119,7 +124,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         max_weight: Weight,
         next_node: &TreeNode,
         nodes: &InverseBloomFilter<TreeNode>,
-        output_nodes: &mut BinaryHeap<Recycled<'a, TreeNode>>,
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let lexicon = self.speller.lexicon();
         let operations = lexicon.alphabet().operations();
@@ -156,10 +161,9 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
 
                         if let Some(applied_node) = next_node.apply_operation(pool, op, &transition)
                         {
-                            // This must not be bloom filtered or we get missing results
-                            // if !nodes.test(&applied_node) {
-                            output_nodes.push(applied_node);
-                            // }
+                            if !nodes.test(&applied_node) {
+                                output_nodes.push(applied_node);
+                            }
                         }
                     }
                 }
@@ -176,7 +180,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         max_weight: Weight,
         next_node: &TreeNode,
         nodes: &InverseBloomFilter<TreeNode>,
-        output_nodes: &mut BinaryHeap<Recycled<'a, TreeNode>>,
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let mutator = self.speller.mutator();
         let lexicon = self.speller.lexicon();
@@ -225,6 +229,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 0,
+                                nodes,
                                 output_nodes,
                             );
                         }
@@ -241,6 +246,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 0,
+                                nodes,
                                 output_nodes,
                             );
                         }
@@ -258,6 +264,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     transition.target().unwrap(),
                     transition.weight().unwrap(),
                     0,
+                    nodes,
                     output_nodes,
                 );
             }
@@ -276,12 +283,13 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         mutator_state: u32,
         mutator_weight: Weight,
         input_increment: i16,
-        output_nodes: &mut BinaryHeap<Recycled<'a, TreeNode>>,
+        nodes: &InverseBloomFilter<TreeNode>,
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let lexicon = self.speller.lexicon();
         let identity = lexicon.alphabet().identity();
         let mut next = lexicon.next(next_node.lexicon_state, input_sym).unwrap();
-        // let mut output_nodes: BinaryHeap<Recycled<'a, TreeNode>> = Vec::new();
+        // let mut output_nodes: Vec<Recycled<'a, TreeNode>> = Vec::new();
 
         while let Some(noneps_trans) = lexicon.take_non_epsilons(next, input_sym) {
             if let Some(mut sym) = noneps_trans.symbol() {
@@ -307,8 +315,9 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         noneps_trans.weight().unwrap() + mutator_weight,
                     );
 
-                    // Testing against seen nodes causes non-determinism here
-                    output_nodes.push(new_node);
+                    if !nodes.test(&new_node) {
+                        output_nodes.push(new_node);
+                    }
                 }
             }
 
@@ -324,7 +333,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         next_node: &TreeNode,
         nodes: &InverseBloomFilter<TreeNode>,
         input_sym: SymbolNumber,
-        output_nodes: &mut BinaryHeap<Recycled<'a, TreeNode>>,
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let mutator = self.speller.mutator();
         let lexicon = self.speller.lexicon();
@@ -373,6 +382,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 1,
+                                nodes,
                                 output_nodes,
                             );
                         }
@@ -388,6 +398,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                                 transition.target().unwrap(),
                                 transition.weight().unwrap(),
                                 1,
+                                nodes,
                                 output_nodes,
                             );
                         }
@@ -404,6 +415,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     transition.target().unwrap(),
                     transition.weight().unwrap(),
                     1,
+                    nodes,
                     output_nodes,
                 );
 
@@ -419,7 +431,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         max_weight: Weight,
         next_node: &TreeNode,
         nodes: &InverseBloomFilter<TreeNode>,
-        output_nodes: &mut BinaryHeap<Recycled<'a, TreeNode>>,
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let mutator = self.speller.mutator();
         let input_state = next_node.input_state as usize;
@@ -471,7 +483,8 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         pool: &'a Pool<TreeNode>,
         max_weight: Weight,
         next_node: &TreeNode,
-        output_nodes: &mut BinaryHeap<Recycled<'a, TreeNode>>,
+        nodes: &InverseBloomFilter<TreeNode>,
+        output_nodes: &mut Vec<Recycled<'a, TreeNode>>,
     ) {
         let mutator = self.speller.mutator();
         let lexicon = self.speller.lexicon();
@@ -498,6 +511,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         next_node.mutator_state,
                         0.0,
                         1,
+                        nodes,
                         output_nodes,
                     );
                 }
@@ -512,6 +526,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                         next_node.mutator_state,
                         0.0,
                         1,
+                        nodes,
                         output_nodes,
                     );
                 }
@@ -528,6 +543,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             next_node.mutator_state,
             0.0,
             1,
+            nodes,
             output_nodes,
         );
     }
@@ -582,27 +598,12 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
             }
 
             self.lexicon_epsilons(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
-            self.lexicon_consume(&pool, max_weight, &next_node, &mut nodes);
+            self.lexicon_consume(&pool, max_weight, &next_node, &seen_nodes, &mut nodes);
 
             seen_nodes.add(next_node.key());
         }
 
         false
-    }
-
-    #[inline(always)]
-    fn pop<'a>(
-        &self,
-        nodes: &mut BinaryHeap<Recycled<'a, TreeNode>>,
-        is_front: &mut bool,
-    ) -> Option<Recycled<'a, TreeNode>> {
-        // *is_front = !*is_front;
-        // if *is_front {
-
-        nodes.pop()
-        // } else {
-        //     nodes.pop_back()
-        // }
     }
 
     pub fn suggest(self: Arc<Self>) -> Vec<Suggestion> {
@@ -612,11 +613,20 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
         let mut suggestions: Vec<Suggestion> = vec![];
         let mut best_weight = self.config.max_weight.unwrap_or(f32::INFINITY);
 
-        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::new();
-        let mut is_front = false;
+        let mut next_rando = PRIMES.iter().rev();
+        let mut max_rando = next_rando.next().copied().unwrap();
+        let mut rando = 0;
 
-        while let Some(next_node) = self.pop(&mut nodes, &mut is_front) {
-            seen_nodes.add(next_node.key());
+        let mut seen_nodes: InverseBloomFilter<TreeNode> = InverseBloomFilter::new();
+
+        while let Some(next_node) = nodes.pop() {
+            if rando == max_rando {
+                seen_nodes.add(next_node.key());
+                rando = 0;
+                max_rando = next_rando.next().copied().unwrap_or(0);
+            } else {
+                rando += 1;
+            }
 
             let max_weight = self.update_weight_limit(best_weight, &suggestions);
 
