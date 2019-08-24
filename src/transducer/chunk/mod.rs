@@ -11,7 +11,6 @@ use crate::types::{SymbolNumber, TransitionTableIndex, Weight};
 use memmap::Mmap;
 use serde_derive::{Deserialize, Serialize};
 
-
 mod alphabet;
 
 use self::alphabet::TransducerAlphabetParser;

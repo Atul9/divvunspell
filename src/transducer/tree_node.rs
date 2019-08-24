@@ -36,6 +36,24 @@ impl std::cmp::PartialEq for TreeNode {
     }
 }
 
+use std::cmp::Ordering;
+
+impl std::cmp::Ord for TreeNode {
+    fn cmp(&self, other: &Self) -> Ordering {
+        if self.weight < other.weight {
+            return Ordering::Less;
+        } else {
+            return Ordering::Greater;
+        }
+    }
+}
+
+impl std::cmp::PartialOrd for TreeNode {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 impl std::cmp::Eq for TreeNode {}
 
 impl Hash for TreeNode {
@@ -215,7 +233,7 @@ impl TreeNode {
         value: i16,
         transition: &SymbolTransition,
     ) -> Recycled<'a, TreeNode> {
-        let mut node = self.apply_transition(pool, transition); 
+        let mut node = self.apply_transition(pool, transition);
         node.flag_state[feature as usize] = value;
         node
     }

@@ -201,10 +201,7 @@ pub extern "C" fn speller_suggest(
 }
 
 #[no_mangle]
-pub extern "C" fn speller_is_correct(
-    handle: *mut SpellerArchive,
-    raw_word: *mut c_char,
-) -> u8 {
+pub extern "C" fn speller_is_correct(handle: *mut SpellerArchive, raw_word: *mut c_char) -> u8 {
     let c_str = unsafe { CStr::from_ptr(raw_word) };
     let word = c_str.to_str().unwrap();
 
