@@ -527,7 +527,7 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                 continue;
             }
 
-            let weight = next_node.weight()
+            let mut weight = next_node.weight()
                 + self
                     .speller
                     .lexicon()
@@ -539,9 +539,26 @@ impl<'t, T: Transducer + 't> SpellerWorker<T> {
                     .final_weight(next_node.mutator_state)
                     .unwrap();
 
+            if self.input[0] == next_node.string[0] {
+                weight -= 10.0;
+            }
+
+            // if self.input.last().unwrap() != next_node.string.last().unwrap() {
+            //     weight += 5.0;
+            // }
+
+            // if self.input.len() > 2 && next_node.string.len() > 2 {
+            //     let score = strsim::generic_damerau_levenshtein(
+            //         &self.input[1..self.input.len()-1],
+            //         &next_node.string[1..next_node.string.len()-1]);
+
+            //     weight += score as f32 * 3.0;
+            // }
+
             if !self.is_under_weight_limit(max_weight, weight) {
                 continue;
             }
+
             let string: SmolStr = next_node
                 .string
                 .iter()
